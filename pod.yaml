@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: cve-2024-3094
+  labels:
+    app: cve-2024-3094
+spec:
+  containers:
+  - name: cve-2024-3094
+    image: r0binak/backdoor:v1.5
+    ports:
+    - containerPort: 22
